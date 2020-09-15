@@ -3,7 +3,7 @@ kind: Deployment
 metadata:
   name: web-deployment-#{Release.Artifacts.image.BuildId}#
   labels:
-    version: "#{deploy}#"
+    type: "#{deploy}#"
 spec:
   replicas: 3
   selector:
@@ -13,7 +13,7 @@ spec:
     metadata:
       labels:
         app: web
-        version: "#{deploy}#"
+        version: "web-#{Release.Artifacts.image.BuildId}#"
     spec:
       containers: 
         - name: web
