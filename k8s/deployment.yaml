@@ -3,12 +3,15 @@ kind: Deployment
 metadata:
   name: web-deployment-#{Release.Artifacts.image.BuildId}#
   labels:
+    app: web
     type: "#{deploy}#"
 spec:
   replicas: 3
   selector:
     matchLabels:
       app: web
+      version: "web-#{Release.Artifacts.image.BuildId}#"
+      type: "#{deploy}#"
   template:
     metadata:
       labels:

@@ -3,7 +3,7 @@ kind: Service
 metadata: 
   name: web-service-temp
   labels: 
-    name: web
+    app: web
     type: "#{deploy}#"
 spec:
   ports:
