@@ -5,6 +5,7 @@ metadata:
   labels: 
     name: web
 spec:
+  externalTrafficPolicy: Cluster
   ports:
     - port: 80
       protocol: TCP
@@ -12,4 +13,7 @@ spec:
   selector: 
     app: web
     version: "web-#{Release.Artifacts.image.BuildId}#"
+  sessionAffinity: None
   type: NodePort
+status:
+  loadBalancer: {}
