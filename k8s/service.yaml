@@ -13,4 +13,4 @@ spec:
   selector: 
     app: web
     type: "#{deploy}#"
-  type: LoadBalancer
+  type: NodePort
