@@ -9,6 +9,8 @@ spec:
   selector:
     matchLabels:
       app: web
+      version: "web-#{Release.Artifacts.image.BuildId}#"
+      type: "#{deploy}#"
   template:
     metadata:
       labels:
