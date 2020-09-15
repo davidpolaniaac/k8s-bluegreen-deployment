@@ -1,10 +1,9 @@
 apiVersion: v1
 kind: Service
 metadata: 
-  name: web-service-temp
+  name: web-service-#{env}#
   labels: 
     app: web
-    type: "#{deploy}#"
 spec:
   ports:
     - name: http
@@ -12,6 +11,5 @@ spec:
       targetPort: 80
   selector: 
     app: web
-    type: "#{deploy}#"
+    version: "web-#{Release.Artifacts.image.BuildId}#"
   type: LoadBalancer
-

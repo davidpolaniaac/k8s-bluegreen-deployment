@@ -16,7 +16,6 @@ spec:
       labels:
         app: web
         version: "web-#{Release.Artifacts.image.BuildId}#"
-        type: "#{deploy}#"
     spec:
       containers: 
         - name: web
