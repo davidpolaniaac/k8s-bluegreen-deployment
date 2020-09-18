@@ -1,0 +1,196 @@
+trigger:
+    - none
+    
+pool:
+    vmImage: Ubuntu-16.04
+
+variables:
+    imageName: blue-green
+    containerRegistry: 'dpolania'
+    dockerRegistryServiceConnection: DockerHub
+    kubernetesServiceConnection: Kubernetes
+    namespace: 'default'
+    app: 'web'
+    tag: '$(Build.BuildId)'
+    service-temp: '$(app)-temp'
+    secretName: 'k8s-bluegreen-deployment'
+    imageRepository: '$(containerRegistry)/$(imageName):$(tag)'
+
+stages:
+- stage: Build
+  displayName: Build stage
+  jobs:  
+  - job: Build
+    displayName: Build
+    pool:
+        vmImage: Ubuntu-16.04
+    steps:
+    - task: Docker@2
+      displayName: Build and push image
+      inputs:
+        containerRegistry: $(dockerRegistryServiceConnection)
+        repository: $(containerRegistry)/$(imageName)
+        command: buildAndPush
+        Dockerfile: src/Dockerfile
+        tags: |
+            $(tag)
+
+    - upload: k8s
+      artifact: k8s
+
+- stage: DeployGreen
+  displayName: Deploy Green
+  dependsOn: Build
+  condition: succeeded()
+
+  jobs:
+  - deployment: Deploygreen
+    displayName: Deploy Green
+    pool:
+      vmImage: Ubuntu-16.04
+    environment: 'aksbluegreen.default'
+    variables:
+        deploy: green
+        env: temp
+    strategy:
+      runOnce:
+        deploy:
+          steps:
+          - task: qetza.replacetokens.replacetokens-task.replacetokens@3
+            displayName: 'Replace tokens in service'
+            inputs:
+              rootDirectory: '$(Pipeline.Workspace)/k8s'
+              targetFiles: '**/*.yaml'
+
+          - task: KubernetesManifest@0
+            displayName: Create imagePullSecret
+            inputs:
+              action: createSecret
+              kubernetesServiceConnection: $(kubernetesServiceConnection)
+              namespace: '$(namespace)'
+              secretName: $(secretName)
+              dockerRegistryEndpoint: $(dockerRegistryServiceConnection)
+
+          - task: KubernetesManifest@0
+            displayName: Deploy
+            inputs:
+              kubernetesServiceConnection: $(kubernetesServiceConnection)
+              namespace: '$(namespace)'
+              manifests: '$(Pipeline.Workspace)/k8s/*'
+              containers: '$(imageRepository)'
+              imagePullSecrets: $(secretName)
+
+- stage: PromoteRejectGreen
+  displayName: Promote or Reject Green
+  dependsOn: DeployGreen
+  condition: succeeded()
+
+  jobs:
+  - deployment: PromoteGreen
+    displayName: Promote Canary
+    pool: 
+      vmImage: Ubuntu-16.04
+    environment: 'akspromote.default'
+    variables:
+        deploy: blue
+        env: prod
+    strategy:
+      runOnce:
+        deploy:
+          steps:
+          - task: qetza.replacetokens.replacetokens-task.replacetokens@3
+            displayName: 'Replace tokens in prod'
+            inputs:
+              rootDirectory: '$(Pipeline.Workspace)/k8s'
+              targetFiles: '**/*.yaml'
+
+          - task: KubernetesManifest@0
+            displayName: 'Deploy service prod'
+            inputs:
+              kubernetesServiceConnection: $(kubernetesServiceConnection)
+              namespace: '$(namespace)'
+              manifests: '$(Pipeline.Workspace)/k8s/service.yaml'
+
+- stage: RejectGreen
+  displayName: Reject green
+  dependsOn: PromoteRejectGreen
+  condition: failed()
+
+  jobs:
+  - deployment: RejectGreen
+    displayName: Reject Green
+    pool: 
+      vmImage: Ubuntu-16.04
+    environment: 'akscanary.default'
+    variables:
+        deploy: green
+        env: temp
+    strategy:
+      runOnce:
+        deploy:
+          steps: 
+          - task: KubernetesManifest@0
+            displayName: 'Delete green service'
+            inputs:
+              action: delete
+              kubernetesServiceConnection: $(kubernetesServiceConnection)
+              namespace: '$(namespace)'
+              arguments: 'service $(service-temp)'
+
+          - task: KubernetesManifest@0
+            displayName: 'Delete green deployment'
+            inputs:
+              action: delete
+              kubernetesServiceConnection: $(kubernetesServiceConnection)
+              namespace: '$(namespace)'
+              arguments: 'deployment -l type=$(deploy)'
+
+- stage: CleanGreen
+  displayName: Clean green
+  dependsOn: PromoteRejectGreen
+  condition: succeeded()
+
+  jobs:
+  - deployment: CleanGreen
+    displayName: Clean Green
+    pool: 
+      vmImage: Ubuntu-16.04
+    environment: 'akspromote.default'
+    variables:
+        deploy: blue
+        env: prod
+    strategy:
+      runOnce:
+        deploy:
+          steps: 
+          - task: qetza.replacetokens.replacetokens-task.replacetokens@3
+            displayName: 'Replace to green to blue'
+            inputs:
+              rootDirectory: '$(Pipeline.Workspace)/k8s'
+              targetFiles: '**/*.yaml'
+
+          - task: KubernetesManifest@0
+            displayName: 'Delete green deployment blue old'
+            inputs:
+              action: delete
+              kubernetesServiceConnection: $(kubernetesServiceConnection)
+              namespace: '$(namespace)'
+              arguments: 'deployment -l type=$(deploy)'
+
+          - task: KubernetesManifest@0
+            displayName: 'delete service temp'
+            inputs:
+              action: delete
+              kubernetesServiceConnection: $(kubernetesServiceConnection)
+              namespace: '$(namespace)'
+              arguments: 'service $(service-temp)'
+
+          - task: KubernetesManifest@0
+            displayName: ' Update deployment green to blue'
+            inputs:
+              kubernetesServiceConnection: $(kubernetesServiceConnection)
+              namespace: '$(namespace)'
+              manifests: '$(Pipeline.Workspace)/k8s/deployment.yaml'
+              containers: '$(imageRepository)'
+              imagePullSecrets: $(secretName)
+

@@ -1,25 +1,25 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: web-#{Release.Artifacts.image.BuildId}#
+  name: "#{app}#-#{version}#"
   labels:
-    app: web
+    app: "#{app}#"
     type: "#{deploy}#"
 spec:
   replicas: 3
   selector:
     matchLabels:
-      app: web
-      version: "web-#{Release.Artifacts.image.BuildId}#"
+      app: "#{app}#"
+      version: "#{app}#-#{version}#"
   template:
     metadata:
       labels:
-        app: web
-        version: "web-#{Release.Artifacts.image.BuildId}#"
+        app: "#{app}#"
+        version: "#{app}#-#{version}#"
     spec:
       containers: 
-        - name: web
-          image: dpolania/blue-green
+        - name: "#{app}#"
+          image: "#{containerRegistry}#/#{imageName}#"
           imagePullPolicy: Always
           ports:
             - name: http
