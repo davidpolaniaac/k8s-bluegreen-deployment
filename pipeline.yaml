@@ -121,7 +121,7 @@ stages:
     displayName: Reject Green
     pool: 
       vmImage: Ubuntu-16.04
-    environment: 'akscanary.default'
+    environment: 'aksbluegreen.default'
     variables:
         deploy: green
         env: temp
